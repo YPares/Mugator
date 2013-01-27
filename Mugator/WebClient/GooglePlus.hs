@@ -24,18 +24,16 @@ import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Data.Monoid
 import Data.String
-import System.FilePath ((</>))
-import System.Environment (getEnv)
 
 import qualified Data.Foldable    as D
 import qualified Data.Traversable as D
 
 
-newtype UserId = UserId String deriving (Show, Eq)
+newtype UserId = UserId T.Text deriving (Show, Eq)
 
-type URL = String
+type URL = T.Text
 
-type MimeType = String
+type MimeType = T.Text
 
 data Medium a = Audio MimeType a | Video MimeType a | Link URL
   deriving (Show, Eq, Functor, D.Foldable, D.Traversable)
@@ -43,7 +41,7 @@ data Medium a = Audio MimeType a | Video MimeType a | Link URL
 data Picture a = Picture MimeType !Int !Int a
   deriving (Show, Eq, Functor, D.Foldable, D.Traversable)
 
-type UserName = String
+type UserName = T.Text
 type UserProfile = URL
 data User a = User { userId      :: UserId
                    , userName    :: UserName
@@ -52,8 +50,8 @@ data User a = User { userId      :: UserId
   deriving (Show, Eq, Functor, D.Foldable, D.Traversable)
 
 data Entry a = Entry { entryPostURL   :: URL
-                     , entryTitle     :: String
-                     , entryCategory  :: String
+                     , entryTitle     :: T.Text
+                     , entryCategory  :: T.Text
                     -- , entryScore     :: !Int
                      , entryMedium    :: Medium a
                     -- , entryThumbnail :: Maybe (Picture a)
@@ -64,10 +62,10 @@ data Entry a = Entry { entryPostURL   :: URL
 
 http' req = H.http req ?manager
 setQuery req query = req { H.queryString = H.renderSimpleQuery True
-                             (("key", ?apiKey):query) }
+                             (("key", fromString ?apiKey):query) }
 
 getActivity (UserId uid) = do
-  req <- H.parseUrl $ "https://www.googleapis.com/plus/v1/people/" <> uid
+  req <- H.parseUrl $ "https://www.googleapis.com/plus/v1/people/" <> T.unpack uid
                       <> "/activities/public"
   H.Response {H.responseBody=res, H.responseStatus=stat} <- http' $ setQuery req
       [("fields", "id,items(access(description),actor(displayName,id,image,url),object(attachments(displayName,embed,image,objectType,url)),url),nextPageToken")]
@@ -94,7 +92,7 @@ breakActivity jActivity = runMaybeT $ do
     entryCategory <- lk "access" item >>= lk "description"
     attachment    <- lk "object" item >>= lk "attachments" >>= tryHead
     objectType    <- lk "objectType" attachment
-    guard (objectType == ("video"::String))  -- For now
+    guard (objectType == ("video"::T.Text))  -- For now
     embed         <- lk "embed" attachment
     entryMedium   <- Video <$> lk "type" embed <*> lk "url" embed
     entryTitle    <- lk "displayName" attachment
@@ -107,15 +105,4 @@ breakActivity jActivity = runMaybeT $ do
       return User{..}
     lift $ C.yield Entry{..}
   return (nextPageToken :: T.Text)
-    
-
-metalComm = UserId "102004979259719098381"
-
-main :: IO ()
-main = do 
-  homeDir <- getEnv "HOME"
-  ak <- fromString <$> readFile (homeDir </> ".gplus.apikey")
-  H.withManager $ \m ->
-    let ?manager = m
-        ?apiKey = ak in getActivity metalComm
 
