@@ -66,46 +66,47 @@ http' req = H.http req ?manager
 setQuery req query = req { H.queryString = H.renderSimpleQuery True
                              (("key", ?apiKey):query) }
 
-asEntryURL x = x :: Entry URL
-
 getActivity (UserId uid) = do
   req <- H.parseUrl $ "https://www.googleapis.com/plus/v1/people/" <> uid
                       <> "/activities/public"
   H.Response {H.responseBody=res, H.responseStatus=stat} <- http' $ setQuery req
       [("fields", "id,items(access(description),actor(displayName,id,image,url),object(attachments(displayName,embed,image,objectType,url)),url),nextPageToken")]
-  liftIO $ do putStr "Google+ "
+  liftIO $ do putStr "From Google+: "
               print stat
   res $$+- ((C.sinkParser J.json' >>= breakActivity) >+>
-            C.map (fromString . show . asEntryURL) >+> C.sinkFile "plop")
+            C.map entryToBS >+> C.sinkFile "entries.txt")
   return ()
+  where entryToBS entry = fromString . (<> "\n") . show $ (entry :: Entry URL)
 
-lk k hm = MaybeT $ return $ M.lookup (k :: T.Text) hm
 tryHead v = guard (not $ V.null v) >> (return $ V.unsafeHead v)
 continueOnFailure act = act `mplus` return ()
 fromJValue jvalue = case J.fromJSON jvalue of
                       J.Success a -> return a
                       J.Error _   -> mzero
-lkj k hm = lk k hm >>= fromJValue
+lk k hm = MaybeT (return $ M.lookup (k :: T.Text) hm) >>= fromJValue
 
-breakActivity activity = runMaybeT $ do
-  items <- fromJValue activity >>= lkj "items"
+breakActivity jActivity = runMaybeT $ do
+  activity      <- fromJValue jActivity
+  nextPageToken <- lk "nextPageToken" activity
+  items         <- lk "items" activity
   V.forM_ items $ \item -> continueOnFailure $ do
-    entryPostURL  <- lkj "url" item
-    entryCategory <- lkj "access" item >>= lkj "description"
-    attachment    <- lkj "object" item >>= lkj "attachments" >>= tryHead
-    objectType    <- lkj "objectType" attachment
+    entryPostURL  <- lk "url" item
+    entryCategory <- lk "access" item >>= lk "description"
+    attachment    <- lk "object" item >>= lk "attachments" >>= tryHead
+    objectType    <- lk "objectType" attachment
     guard (objectType == ("video"::String))  -- For now
-    embed         <- lkj "embed" attachment
-    entryMedium   <- Video <$> lkj "type" embed <*> lkj "url" embed
-    entryTitle    <- lkj "displayName" attachment
+    embed         <- lk "embed" attachment
+    entryMedium   <- Video <$> lk "type" embed <*> lk "url" embed
+    entryTitle    <- lk "displayName" attachment
     entryPoster   <- do
-      actor       <- lkj "actor" item
-      userId      <- UserId <$> lkj "id" actor
-      userName    <- lkj "displayName" actor
-      userProfile <- lkj "url" actor
-      userAvatar  <- lkj "image" actor >>= lkj "url"
+      actor       <- lk "actor" item
+      userId      <- UserId <$> lk "id" actor
+      userName    <- lk "displayName" actor
+      userProfile <- lk "url" actor
+      userAvatar  <- lk "image" actor >>= lk "url"
       return User{..}
     lift $ C.yield Entry{..}
+  return (nextPageToken :: T.Text)
     
 
 metalComm = UserId "102004979259719098381"
