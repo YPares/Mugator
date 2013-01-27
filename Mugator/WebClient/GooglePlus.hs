@@ -35,7 +35,7 @@ type URL = T.Text
 
 type MimeType = T.Text
 
-data Medium a = Audio MimeType a | Video MimeType a | Link URL
+data Medium a = Audio !MimeType a | Video !MimeType a | Link !URL
   deriving (Show, Eq, Functor, D.Foldable, D.Traversable)
 
 data Picture a = Picture MimeType !Int !Int a
@@ -43,15 +43,15 @@ data Picture a = Picture MimeType !Int !Int a
 
 type UserName = T.Text
 type UserProfile = URL
-data User a = User { userId      :: UserId
-                   , userName    :: UserName
-                   , userProfile :: UserProfile
+data User a = User { userId      :: !UserId
+                   , userName    :: !UserName
+                   , userProfile :: !UserProfile
                    , userAvatar  :: Maybe a }
   deriving (Show, Eq, Functor, D.Foldable, D.Traversable)
 
-data Entry a = Entry { entryPostURL   :: URL
-                     , entryTitle     :: T.Text
-                     , entryCategory  :: T.Text
+data Entry a = Entry { entryPostURL   :: !URL
+                     , entryTitle     :: !T.Text
+                     , entryCategory  :: !T.Text
                     -- , entryScore     :: !Int
                      , entryMedium    :: Medium a
                     -- , entryThumbnail :: Maybe (Picture a)
@@ -83,6 +83,9 @@ fromJValue jvalue = case J.fromJSON jvalue of
                       J.Error _   -> mzero
 lk k hm = MaybeT (return $ M.lookup (k :: T.Text) hm) >>= fromJValue
 
+breakActivity ::
+  (Monad m, J.FromJSON a) =>
+  J.Value -> C.Pipe l i (Entry a) u m (Maybe T.Text)
 breakActivity jActivity = runMaybeT $ do
   activity      <- fromJValue jActivity
   nextPageToken <- lk "nextPageToken" activity
