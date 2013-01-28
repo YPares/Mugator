@@ -6,6 +6,7 @@ import qualified Network.HTTP.Conduit    as H
 import System.FilePath ((</>))
 import System.Environment (getEnv)
 
+import Mugator.WebClient.Types
 import Mugator.WebClient.GooglePlus
 
 
