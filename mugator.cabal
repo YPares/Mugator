@@ -6,7 +6,6 @@ version:             0.1.0.0
 -- synopsis:            
 -- description:         
 -- license:             
-license-file:        LICENSE
 author:              Yves Parès
 maintainer:          yves.pares@gmail.com
 -- copyright:           
@@ -15,6 +14,7 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 library
+  hs-source-dirs:      src
   exposed-modules:     Main, Mugator.WebClient.GooglePlus
   -- other-modules:       
   build-depends:       base ==4.5.*, http-conduit ==1.8.*, filepath ==1.3.*, http-types ==0.7.*, conduit ==0.5.*, attoparsec-conduit ==0.5.*, aeson ==0.6.*, unordered-containers ==0.2.*, vector ==0.10.*, text ==0.11.*, mtl ==2.1.*, transformers ==0.3.*
